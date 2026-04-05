@@ -1,6 +1,10 @@
 const API_BASE =
   process.env.NEXT_PUBLIC_API_URL ?? 'https://python-model-sigma.vercel.app';
 
+/** Base URL for dashboard `/alerts` list (v8dl service). */
+const ALERTS_LIST_BASE =
+  process.env.NEXT_PUBLIC_ALERTS_API_URL ?? 'https://python-model-v8dl.vercel.app';
+
 export interface RealtimeEvent {
   seq?: number;
   kind?: string;
@@ -88,4 +92,29 @@ export async function postUnblockIp(ip: string, reason?: string) {
     body: JSON.stringify({ ip, reason }),
   });
   return parseJson<Record<string, unknown>>(res);
+}
+
+// --- Dashboard alerts API (python-model-v8dl) ---
+
+export interface RemoteDashboardAlert {
+  id: string;
+  device_id?: string;
+  is_closed: boolean;
+  type: string;
+  attack_counts: Record<string, number>;
+  created_at: string;
+  priority: string;
+  title: string;
+  true_positive_count: number;
+  updated_at: string;
+  false_positive_count: number;
+}
+
+export interface RemoteDashboardAlertsResponse {
+  alerts: RemoteDashboardAlert[];
+}
+
+export async function getDashboardAlerts() {
+  const res = await fetch(`${ALERTS_LIST_BASE}/alerts`);
+  return parseJson<RemoteDashboardAlertsResponse>(res);
 }

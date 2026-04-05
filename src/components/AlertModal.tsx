@@ -8,9 +8,17 @@ interface AlertModalProps {
   onClose: () => void;
   onAssign: (id: string) => void;
   onResolve: (id: string, resolution: 'True Positive' | 'False Positive') => void;
+  /** When true, hide assign/resolve (e.g. API-backed dashboard alerts). */
+  readOnly?: boolean;
 }
 
-export default function AlertModal({ alert, onClose, onAssign, onResolve }: AlertModalProps) {
+export default function AlertModal({
+  alert,
+  onClose,
+  onAssign,
+  onResolve,
+  readOnly = false,
+}: AlertModalProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'network' | 'endpoint' | 'email' | 'threat'>('overview');
 
   if (!alert) return null;
@@ -299,29 +307,33 @@ export default function AlertModal({ alert, onClose, onAssign, onResolve }: Aler
 
           {/* Actions */}
           <div className="flex flex-col md:flex-row gap-2 pt-4 border-t border-white/[0.03]">
-            <button
-              onClick={handleAssignAndClose}
-              className="px-4 py-2 rounded-lg bg-[#A7EA3B] text-[#07220a] text-sm hover:bg-[#A7EA3B]/90 transition-colors"
-            >
-              Assign to me
-            </button>
-            <button
-              onClick={() => handleResolve('True Positive')}
-              className="px-4 py-2 rounded-lg bg-[#FF6B6B]/20 text-[#FF6B6B] border border-[#FF6B6B]/30 text-sm hover:bg-[#FF6B6B]/30 transition-colors"
-            >
-              Close as True Positive
-            </button>
-            <button
-              onClick={() => handleResolve('False Positive')}
-              className="px-4 py-2 rounded-lg bg-[#64D16C]/20 text-[#64D16C] border border-[#64D16C]/30 text-sm hover:bg-[#64D16C]/30 transition-colors"
-            >
-              Close as False Positive
-            </button>
+            {!readOnly && (
+              <>
+                <button
+                  onClick={handleAssignAndClose}
+                  className="px-4 py-2 rounded-lg bg-[#A7EA3B] text-[#07220a] text-sm hover:bg-[#A7EA3B]/90 transition-colors"
+                >
+                  Assign to me
+                </button>
+                <button
+                  onClick={() => handleResolve('True Positive')}
+                  className="px-4 py-2 rounded-lg bg-[#FF6B6B]/20 text-[#FF6B6B] border border-[#FF6B6B]/30 text-sm hover:bg-[#FF6B6B]/30 transition-colors"
+                >
+                  Close as True Positive
+                </button>
+                <button
+                  onClick={() => handleResolve('False Positive')}
+                  className="px-4 py-2 rounded-lg bg-[#64D16C]/20 text-[#64D16C] border border-[#64D16C]/30 text-sm hover:bg-[#64D16C]/30 transition-colors"
+                >
+                  Close as False Positive
+                </button>
+              </>
+            )}
             <button
               onClick={onClose}
               className="px-4 py-2 rounded-lg border border-white/[0.04] bg-transparent text-[#98A0AC] hover:bg-white/[0.02] transition-colors text-sm md:ml-auto"
             >
-              Cancel
+              {readOnly ? 'Close' : 'Cancel'}
             </button>
           </div>
         </div>

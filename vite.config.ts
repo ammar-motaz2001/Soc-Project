@@ -9,6 +9,9 @@ import react from '@vitejs/plugin-react';
     'process.env.NEXT_PUBLIC_API_URL': JSON.stringify(
       process.env.NEXT_PUBLIC_API_URL ?? 'https://python-model-sigma.vercel.app',
     ),
+    'process.env.NEXT_PUBLIC_ALERTS_API_URL': JSON.stringify(
+      process.env.NEXT_PUBLIC_ALERTS_API_URL ?? 'https://python-model-v8dl.vercel.app',
+    ),
   },
     resolve: {
       extensions: ['.js', '.jsx', '.ts', '.tsx', '.json'],

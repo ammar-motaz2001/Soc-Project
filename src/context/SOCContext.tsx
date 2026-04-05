@@ -52,6 +52,9 @@ export interface Alert {
   eventCount?: number;
   geoLocation?: string;
   reputation?: 'Malicious' | 'Suspicious' | 'Unknown' | 'Trusted';
+  /** From dashboard alerts API (python-model-v8dl). */
+  true_positive_count?: number;
+  false_positive_count?: number;
 }
 
 export interface AutomatedAction {
