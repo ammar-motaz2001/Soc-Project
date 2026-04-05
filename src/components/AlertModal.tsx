@@ -6,31 +6,39 @@ import ModalPortal from './ModalPortal';
 interface AlertModalProps {
   alert: Alert | null;
   onClose: () => void;
-  onAssign: (id: string) => void;
-  onResolve: (id: string, resolution: 'True Positive' | 'False Positive') => void;
-  /** When true, hide assign/resolve (e.g. API-backed dashboard alerts). */
+  onResolve: (
+    id: string,
+    resolution: 'True Positive' | 'False Positive',
+  ) => void | Promise<void>;
+  /** When true, hide resolve actions (e.g. API-backed dashboard alerts). */
   readOnly?: boolean;
+  /** Disables triage actions while an async resolve is in flight. */
+  isBusy?: boolean;
 }
 
 export default function AlertModal({
   alert,
   onClose,
-  onAssign,
   onResolve,
   readOnly = false,
+  isBusy = false,
 }: AlertModalProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'network' | 'endpoint' | 'email' | 'threat'>('overview');
 
   if (!alert) return null;
 
-  const handleAssignAndClose = () => {
-    onAssign(alert.id);
-    onClose();
-  };
-
   const handleResolve = (resolution: 'True Positive' | 'False Positive') => {
-    onResolve(alert.id, resolution);
-    onClose();
+    void (async () => {
+      try {
+        const out = onResolve(alert.id, resolution);
+        if (out != null && typeof (out as Promise<unknown>).then === 'function') {
+          await out;
+        }
+        onClose();
+      } catch {
+        // Parent shows error toast; keep modal open.
+      }
+    })();
   };
 
   const getSeverityColor = (severity: string) => {
@@ -310,26 +318,25 @@ export default function AlertModal({
             {!readOnly && (
               <>
                 <button
-                  onClick={handleAssignAndClose}
-                  className="px-4 py-2 rounded-lg bg-[#A7EA3B] text-[#07220a] text-sm hover:bg-[#A7EA3B]/90 transition-colors"
-                >
-                  Assign to me
-                </button>
-                <button
+                  type="button"
+                  disabled={isBusy}
                   onClick={() => handleResolve('True Positive')}
-                  className="px-4 py-2 rounded-lg bg-[#FF6B6B]/20 text-[#FF6B6B] border border-[#FF6B6B]/30 text-sm hover:bg-[#FF6B6B]/30 transition-colors"
+                  className="px-4 py-2 rounded-lg bg-[#FF6B6B]/20 text-[#FF6B6B] border border-[#FF6B6B]/30 text-sm hover:bg-[#FF6B6B]/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Close as True Positive
                 </button>
                 <button
+                  type="button"
+                  disabled={isBusy}
                   onClick={() => handleResolve('False Positive')}
-                  className="px-4 py-2 rounded-lg bg-[#64D16C]/20 text-[#64D16C] border border-[#64D16C]/30 text-sm hover:bg-[#64D16C]/30 transition-colors"
+                  className="px-4 py-2 rounded-lg bg-[#64D16C]/20 text-[#64D16C] border border-[#64D16C]/30 text-sm hover:bg-[#64D16C]/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Close as False Positive
                 </button>
               </>
             )}
             <button
+              type="button"
               onClick={onClose}
               className="px-4 py-2 rounded-lg border border-white/[0.04] bg-transparent text-[#98A0AC] hover:bg-white/[0.02] transition-colors text-sm md:ml-auto"
             >

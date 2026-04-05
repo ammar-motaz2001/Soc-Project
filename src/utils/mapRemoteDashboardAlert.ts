@@ -22,6 +22,7 @@ export function mapRemoteDashboardAlertToAlert(remote: RemoteDashboardAlert): Al
 
   const notes = [
     `Device ID: ${remote.device_id ?? '—'}`,
+    ...(remote.device_ip ? [`Device IP: ${remote.device_ip}`] : []),
     `Attacks: ${attackSummary}`,
     `True positives: ${remote.true_positive_count} • False positives: ${remote.false_positive_count}`,
     `Updated: ${remote.updated_at}`,
@@ -48,6 +49,7 @@ export function mapRemoteDashboardAlertToAlert(remote: RemoteDashboardAlert): Al
     status: remote.is_closed ? 'Closed' : 'Open',
     assigned: null,
     notes,
+    sourceIP: remote.device_ip,
     timestamp: remote.updated_at,
     firstSeen: remote.created_at,
     lastSeen: remote.updated_at,

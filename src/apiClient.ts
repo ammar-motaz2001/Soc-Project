@@ -19,11 +19,25 @@ export interface RecentEventsResponse {
 }
 
 async function parseJson<T>(res: Response): Promise<T> {
+  const text = await res.text();
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`HTTP ${res.status}: ${text}`);
+    let message = `HTTP ${res.status}`;
+    if (text) {
+      try {
+        const errBody = JSON.parse(text) as { detail?: unknown };
+        if (errBody?.detail != null) {
+          message = String(errBody.detail);
+        } else {
+          message = `${message}: ${text}`;
+        }
+      } catch {
+        message = `${message}: ${text}`;
+      }
+    }
+    throw new Error(message);
   }
-  return res.json() as Promise<T>;
+  if (!text) return {} as T;
+  return JSON.parse(text) as T;
 }
 
 export async function getHealth() {
@@ -99,6 +113,7 @@ export async function postUnblockIp(ip: string, reason?: string) {
 export interface RemoteDashboardAlert {
   id: string;
   device_id?: string;
+  device_ip?: string;
   is_closed: boolean;
   type: string;
   attack_counts: Record<string, number>;
@@ -111,10 +126,30 @@ export interface RemoteDashboardAlert {
 }
 
 export interface RemoteDashboardAlertsResponse {
+  total_alerts?: number;
+  total_closed?: number;
   alerts: RemoteDashboardAlert[];
 }
 
 export async function getDashboardAlerts() {
-  const res = await fetch(`${ALERTS_LIST_BASE}/alerts`);
+  const res = await fetch(`${ALERTS_LIST_BASE}/alerts`, {
+    headers: { accept: 'application/json' },
+  });
   return parseJson<RemoteDashboardAlertsResponse>(res);
+}
+
+export async function patchCloseAlertAsTruePositive(alertId: string) {
+  const res = await fetch(
+    `${ALERTS_LIST_BASE}/alerts/${encodeURIComponent(alertId)}/close-as-true-positive`,
+    { method: 'PATCH', headers: { accept: 'application/json' } },
+  );
+  return parseJson<Record<string, unknown>>(res);
+}
+
+export async function patchCloseAlertAsFalsePositive(alertId: string) {
+  const res = await fetch(
+    `${ALERTS_LIST_BASE}/alerts/${encodeURIComponent(alertId)}/close-as-false-positive`,
+    { method: 'PATCH', headers: { accept: 'application/json' } },
+  );
+  return parseJson<Record<string, unknown>>(res);
 }

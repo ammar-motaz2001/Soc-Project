@@ -1,25 +1,53 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Search } from 'lucide-react';
-import { useSOC } from '../context/SOCContext';
+import { toast } from 'sonner@2.0.3';
+import type { Alert } from '../context/SOCContext';
 import PageHeader from '../components/PageHeader';
 import AlertModal from '../components/AlertModal';
-import { Alert } from '../context/SOCContext';
+import {
+  getDashboardAlerts,
+  patchCloseAlertAsFalsePositive,
+  patchCloseAlertAsTruePositive,
+} from '../apiClient';
+import { mapRemoteDashboardAlertToAlert } from '../utils/mapRemoteDashboardAlert';
 
 export default function AlertQueue() {
-  const { state, assignAlert, resolveAlert } = useSOC();
+  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [totalAlerts, setTotalAlerts] = useState<number | null>(null);
+  const [totalClosed, setTotalClosed] = useState<number | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [severityFilter, setSeverityFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [perPage, setPerPage] = useState(5);
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedAlert, setSelectedAlert] = useState<Alert | null>(null);
+  const [closingId, setClosingId] = useState<string | null>(null);
 
-  const assignedAlert = state.alerts.find(
-    (a) => a.assigned === 'analyst' && a.status === 'Open'
-  );
+  const loadAlerts = useCallback(async () => {
+    setLoadError(null);
+    try {
+      const data = await getDashboardAlerts();
+      const mapped = (data.alerts ?? []).map(mapRemoteDashboardAlertToAlert);
+      setAlerts(mapped);
+      setTotalAlerts(data.total_alerts ?? mapped.length);
+      setTotalClosed(data.total_closed ?? mapped.filter((a) => a.status === 'Closed').length);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Failed to load alerts';
+      setLoadError(message);
+      toast.error('Could not load alert queue', { description: message });
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadAlerts();
+  }, [loadAlerts]);
 
   const filteredAlerts = useMemo(() => {
-    let filtered = [...state.alerts].reverse();
+    let filtered = [...alerts];
 
     if (search) {
       const searchLower = search.toLowerCase();
@@ -27,7 +55,8 @@ export default function AlertQueue() {
         (a) =>
           a.id.toLowerCase().includes(searchLower) ||
           a.rule.toLowerCase().includes(searchLower) ||
-          a.type.toLowerCase().includes(searchLower)
+          a.type.toLowerCase().includes(searchLower) ||
+          (a.sourceIP?.toLowerCase().includes(searchLower) ?? false),
       );
     }
 
@@ -39,39 +68,88 @@ export default function AlertQueue() {
       filtered = filtered.filter((a) => a.type === typeFilter);
     }
 
-    return filtered;
-  }, [state.alerts, search, severityFilter, typeFilter]);
+    return filtered.sort(
+      (a, b) =>
+        new Date(b.lastSeen ?? b.timestamp ?? b.date).getTime() -
+        new Date(a.lastSeen ?? a.timestamp ?? a.date).getTime(),
+    );
+  }, [alerts, search, severityFilter, typeFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredAlerts.length / perPage));
   const paginatedAlerts = filteredAlerts.slice(
     (currentPage - 1) * perPage,
-    currentPage * perPage
+    currentPage * perPage,
   );
 
-  const handleAssign = (id: string) => {
-    assignAlert(id);
-  };
-
-  const handleResolve = (id: string, resolution: 'True Positive' | 'False Positive') => {
-    resolveAlert(id, resolution);
+  const handleResolve = async (
+    id: string,
+    resolution: 'True Positive' | 'False Positive',
+  ) => {
+    setClosingId(id);
+    try {
+      if (resolution === 'True Positive') {
+        await patchCloseAlertAsTruePositive(id);
+      } else {
+        await patchCloseAlertAsFalsePositive(id);
+      }
+      toast.success(
+        resolution === 'True Positive'
+          ? 'Closed as true positive'
+          : 'Closed as false positive',
+      );
+      setSelectedAlert(null);
+      setIsLoading(true);
+      await loadAlerts();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Request failed';
+      toast.error('Could not close alert', { description: message });
+    } finally {
+      setClosingId(null);
+    }
   };
 
   return (
     <div>
-      <PageHeader title="Alert queue" subtitle="Manage and triage alerts" />
+      <PageHeader
+        title="Alert queue"
+        subtitle={
+          isLoading
+            ? 'Loading from API…'
+            : loadError
+              ? 'API unavailable'
+              : `API • ${totalAlerts ?? alerts.length} total • ${totalClosed ?? '—'} closed`
+        }
+      />
+
+      {loadError && (
+        <div className="mb-3 p-3 rounded-xl bg-[#FF6B6B]/10 border border-[#FF6B6B]/25 text-sm text-[#E6EEF6]">
+          {loadError}
+          <button
+            type="button"
+            onClick={() => {
+              setIsLoading(true);
+              void loadAlerts();
+            }}
+            className="ml-3 px-2 py-1 rounded-lg bg-white/10 hover:bg-white/15 text-xs"
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       <div className="bg-[#19232C] rounded-xl p-3 md:p-5">
-        <div className="mb-3 md:mb-4 text-[#98A0AC] text-xs md:text-sm">Assigned alert</div>
-        <div className="border-l-2 border-[#A7EA3B]/30 pl-3 md:pl-4 text-[#98A0AC] text-xs md:text-sm mb-4 md:mb-6">
-          {assignedAlert ? (
-            <>
-              You are assigned to{' '}
-              <strong className="text-[#A7EA3B]">{assignedAlert.id}</strong> -{' '}
-              {assignedAlert.rule}
-            </>
-          ) : (
-            "You haven't picked up any alert! Assign yourself to an alert to start investigating."
-          )}
+        <div className="flex flex-wrap items-center justify-end gap-2 mb-4 md:mb-6">
+          <button
+            type="button"
+            onClick={() => {
+              setIsLoading(true);
+              void loadAlerts();
+            }}
+            disabled={isLoading}
+            className="px-3 py-1.5 rounded-lg border border-white/[0.06] text-[#98A0AC] text-xs hover:bg-white/[0.04] disabled:opacity-50"
+          >
+            Refresh
+          </button>
         </div>
 
         <div className="flex flex-col md:flex-row md:flex-wrap gap-2 md:gap-3 mb-3 md:mb-4">
@@ -79,7 +157,7 @@ export default function AlertQueue() {
             <Search size={16} className="opacity-80" />
             <input
               type="text"
-              placeholder="Search for an alert"
+              placeholder="Search ID, rule, type, IP"
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value);
@@ -146,22 +224,51 @@ export default function AlertQueue() {
         </div>
 
         <div className="bg-[#19232C] rounded-xl border border-white/[0.03] overflow-x-auto">
-          <table className="w-full border-collapse min-w-[800px]">
+          <table className="w-full border-collapse min-w-[820px]">
             <thead className="bg-[#0f1a22]">
               <tr>
-                <th className="px-2 md:px-4 py-2 md:py-3 text-left text-[#98A0AC] text-xs md:text-sm">ID</th>
-                <th className="px-2 md:px-4 py-2 md:py-3 text-left text-[#98A0AC] text-xs md:text-sm">Alert rule</th>
-                <th className="px-2 md:px-4 py-2 md:py-3 text-left text-[#98A0AC] text-xs md:text-sm">Severity</th>
-                <th className="px-2 md:px-4 py-2 md:py-3 text-left text-[#98A0AC] text-xs md:text-sm">Type</th>
-                <th className="px-2 md:px-4 py-2 md:py-3 text-left text-[#98A0AC] text-xs md:text-sm">Date</th>
-                <th className="px-2 md:px-4 py-2 md:py-3 text-left text-[#98A0AC] text-xs md:text-sm">Status</th>
-                <th className="px-2 md:px-4 py-2 md:py-3 text-left text-[#98A0AC] text-xs md:text-sm">Action</th>
+                <th className="px-2 md:px-4 py-2 md:py-3 text-left text-[#98A0AC] text-xs md:text-sm">
+                  ID
+                </th>
+                <th className="px-2 md:px-4 py-2 md:py-3 text-left text-[#98A0AC] text-xs md:text-sm">
+                  Alert rule
+                </th>
+                <th className="px-2 md:px-4 py-2 md:py-3 text-left text-[#98A0AC] text-xs md:text-sm">
+                  Device IP
+                </th>
+                <th className="px-2 md:px-4 py-2 md:py-3 text-left text-[#98A0AC] text-xs md:text-sm">
+                  Severity
+                </th>
+                <th className="px-2 md:px-4 py-2 md:py-3 text-left text-[#98A0AC] text-xs md:text-sm">
+                  Type
+                </th>
+                <th className="px-2 md:px-4 py-2 md:py-3 text-left text-[#98A0AC] text-xs md:text-sm">
+                  Date
+                </th>
+                <th className="px-2 md:px-4 py-2 md:py-3 text-left text-[#98A0AC] text-xs md:text-sm">
+                  Status
+                </th>
+                <th className="px-2 md:px-4 py-2 md:py-3 text-left text-[#98A0AC] text-xs md:text-sm">
+                  Action
+                </th>
               </tr>
             </thead>
             <tbody>
-              {paginatedAlerts.length === 0 ? (
+              {isLoading && alerts.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-2 md:px-4 py-5 md:py-7 text-center text-[#98A0AC] text-xs md:text-sm">
+                  <td
+                    colSpan={7}
+                    className="px-2 md:px-4 py-5 md:py-7 text-center text-[#98A0AC] text-xs md:text-sm"
+                  >
+                    Loading…
+                  </td>
+                </tr>
+              ) : paginatedAlerts.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={7}
+                    className="px-2 md:px-4 py-5 md:py-7 text-center text-[#98A0AC] text-xs md:text-sm"
+                  >
                     Showing 0 entries
                   </td>
                 </tr>
@@ -171,37 +278,38 @@ export default function AlertQueue() {
                     key={alert.id}
                     className="border-b border-white/[0.02] hover:bg-white/[0.02] transition-colors"
                   >
-                    <td className="px-2 md:px-4 py-2 md:py-3 text-[#98A0AC] text-xs md:text-sm">{alert.id}</td>
+                    <td className="px-2 md:px-4 py-2 md:py-3 text-[#98A0AC] text-xs md:text-sm font-mono max-w-[120px] truncate" title={alert.id}>
+                      {alert.id}
+                    </td>
                     <td
                       className="px-2 md:px-4 py-2 md:py-3 text-[#E6EEF6] text-xs md:text-sm cursor-pointer hover:text-[#A7EA3B]"
                       onClick={() => setSelectedAlert(alert)}
                     >
                       {alert.rule}
                     </td>
-                    <td className="px-2 md:px-4 py-2 md:py-3 text-[#98A0AC] text-xs md:text-sm">{alert.severity}</td>
-                    <td className="px-2 md:px-4 py-2 md:py-3 text-[#98A0AC] text-xs md:text-sm">{alert.type}</td>
-                    <td className="px-2 md:px-4 py-2 md:py-3 text-[#98A0AC] text-xs md:text-sm">{alert.date}</td>
+                    <td className="px-2 md:px-4 py-2 md:py-3 text-[#98A0AC] text-xs md:text-sm font-mono">
+                      {alert.sourceIP ?? '—'}
+                    </td>
+                    <td className="px-2 md:px-4 py-2 md:py-3 text-[#98A0AC] text-xs md:text-sm">
+                      {alert.severity}
+                    </td>
+                    <td className="px-2 md:px-4 py-2 md:py-3 text-[#98A0AC] text-xs md:text-sm">
+                      {alert.type}
+                    </td>
+                    <td className="px-2 md:px-4 py-2 md:py-3 text-[#98A0AC] text-xs md:text-sm">
+                      {alert.date}
+                    </td>
                     <td className="px-2 md:px-4 py-2 md:py-3 text-[#98A0AC] text-xs md:text-sm">
                       {alert.status}
-                      {alert.assigned && (
-                        <span className="text-[#A7EA3B]"> • {alert.assigned}</span>
-                      )}
                     </td>
                     <td className="px-2 md:px-4 py-2 md:py-3 text-xs md:text-sm">
-                      <div className="flex gap-1 md:gap-2">
-                        <button
-                          onClick={() => handleAssign(alert.id)}
-                          className="px-2 md:px-3 py-1 md:py-1.5 rounded-lg bg-[#A7EA3B] text-[#07220a] hover:bg-[#A7EA3B]/90 transition-colors text-xs md:text-sm"
-                        >
-                          Assign
-                        </button>
-                        <button
-                          onClick={() => setSelectedAlert(alert)}
-                          className="px-2 md:px-3 py-1 md:py-1.5 rounded-lg border border-white/[0.04] text-[#98A0AC] hover:bg-white/[0.02] transition-colors text-xs md:text-sm"
-                        >
-                          View
-                        </button>
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedAlert(alert)}
+                        className="px-2 md:px-3 py-1 md:py-1.5 rounded-lg border border-white/[0.04] text-[#98A0AC] hover:bg-white/[0.02] transition-colors text-xs md:text-sm"
+                      >
+                        View
+                      </button>
                     </td>
                   </tr>
                 ))
@@ -236,8 +344,9 @@ export default function AlertQueue() {
       <AlertModal
         alert={selectedAlert}
         onClose={() => setSelectedAlert(null)}
-        onAssign={handleAssign}
         onResolve={handleResolve}
+        readOnly={selectedAlert?.status === 'Closed'}
+        isBusy={closingId === selectedAlert?.id}
       />
     </div>
   );

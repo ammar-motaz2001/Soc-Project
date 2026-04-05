@@ -286,7 +286,6 @@ export default function Dashboard() {
       <AlertModal
         alert={selectedAlert}
         onClose={() => setSelectedAlert(null)}
-        onAssign={() => {}}
         onResolve={() => {}}
         readOnly
       />

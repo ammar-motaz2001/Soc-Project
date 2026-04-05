@@ -118,7 +118,6 @@ export default function Actions() {
       <AlertModal
         alert={selectedAlert}
         onClose={() => setSelectedAlert(null)}
-        onAssign={() => {}}
         onResolve={() => {}}
       />
     </div>
