@@ -141,6 +141,29 @@ function getEventId(event: RealtimeEvent): string {
   return `raw-${JSON.stringify(event)}`;
 }
 
+/** WS events produced when the backend runs POST /detect (DDoS or brute-force paths). */
+function isBackendDetectEvent(event: RealtimeEvent): boolean {
+  const k = String(event.kind ?? '').toLowerCase();
+  return k === 'ddos' || k === 'bruteforce';
+}
+
+function toastForDetectEvent(event: RealtimeEvent): void {
+  const r = event as Record<string, unknown>;
+  const attack = r.attack_detected === true;
+  const attackType = String(r.attack_type ?? event.kind ?? 'Detection');
+  const clientIp = typeof r.client_ip === 'string' ? r.client_ip : undefined;
+  const title = attack ? `Detect: ${attackType}` : `Detect: benign (${attackType})`;
+  const parts = [clientIp ? `Client: ${clientIp}` : null].filter(Boolean) as string[];
+  const description =
+    parts.length > 0 ? parts.join(' • ') : 'Classification from live API';
+
+  if (attack) {
+    toast.error(title, { description, duration: 6500 });
+  } else {
+    toast.info(title, { description, duration: 4500 });
+  }
+}
+
 function toSeverity(value: unknown): Alert['severity'] {
   const normalized = String(value ?? '').toLowerCase();
   if (normalized === 'critical') return 'Critical';
@@ -476,7 +499,7 @@ const generateInitialAutomatedActions = (alerts: Alert[]): AutomatedAction[] => 
 const SOCContext = createContext<SOCContextType | undefined>(undefined);
 
 export function SOCProvider({ children }: { children: ReactNode }) {
-  const { events: realtimeEvents, isConnected } = useRealtimeEvents();
+  const { events: realtimeEvents } = useRealtimeEvents();
   const processedRealtimeIdsRef = useRef<Set<string>>(new Set());
 
   const [state, setState] = useState<SOCState>(() => {
@@ -507,16 +530,6 @@ export function SOCProvider({ children }: { children: ReactNode }) {
   }, [state]);
 
   useEffect(() => {
-    if (!isConnected) {
-      return;
-    }
-    toast.success('Realtime stream connected', {
-      description: 'Live events are now synced from python-model-sigma',
-      duration: 2500,
-    });
-  }, [isConnected]);
-
-  useEffect(() => {
     if (realtimeEvents.length === 0) {
       return;
     }
@@ -545,12 +558,11 @@ export function SOCProvider({ children }: { children: ReactNode }) {
       }));
     }
 
-    const latestEvent = newEvents[newEvents.length - 1];
-    const kind = String(latestEvent.kind ?? 'event');
-    toast.info(`Live event: ${kind}`, {
-      description: JSON.stringify(latestEvent).slice(0, 180),
-      duration: 4500,
-    });
+    for (const evt of newEvents) {
+      if (isBackendDetectEvent(evt)) {
+        toastForDetectEvent(evt);
+      }
+    }
   }, [realtimeEvents]);
 
   // Check for new high/critical alerts and generate automated actions
@@ -571,7 +583,7 @@ export function SOCProvider({ children }: { children: ReactNode }) {
         newActions.push(...actions);
         
         // Generate a case report for EACH automated action
-        actions.forEach((action, index) => {
+        actions.forEach((action) => {
           const caseReport = generateCaseReportFromAction(
             alert, 
             action, 
@@ -580,46 +592,6 @@ export function SOCProvider({ children }: { children: ReactNode }) {
           newCases.push(caseReport);
         });
         
-        // Show toast notification with action names
-        const actionNames = actions.map(a => a.actionType).slice(0, 3); // First 3 actions
-        const moreCount = actions.length > 3 ? ` +${actions.length - 3} more` : '';
-        
-        toast.error(`🚨 ${alert.severity} Alert Detected!`, {
-          description: (
-            <div className="space-y-2">
-              <div className="font-semibold text-base">{alert.rule}</div>
-              <div className="text-sm opacity-80">Alert ID: #{alert.id}</div>
-              <div className="text-sm mt-3 space-y-1">
-                <div className="font-semibold text-[#A7EA3B] text-base mb-2">⚡ Automated Actions Executed:</div>
-                <div className="space-y-1.5">
-                  {actionNames.map((name, idx) => (
-                    <div key={idx} className="flex items-start gap-2">
-                      <span className="text-[#A7F3D0] text-lg leading-none mt-0.5">✓</span>
-                      <span className="text-sm leading-relaxed">{name}</span>
-                    </div>
-                  ))}
-                </div>
-                {moreCount && <div className="text-[#98A0AC] text-xs mt-2 italic">{moreCount}</div>}
-                <div className="text-[#A7EA3B] text-xs mt-2 italic">📋 {actions.length} Case Reports Generated</div>
-              </div>
-              <div className="mt-4 pt-3 border-t border-white/10">
-                <a 
-                  href="/automated-actions" 
-                  className="inline-flex items-center gap-2 text-[#A7EA3B] hover:text-[#A7EA3B]/80 text-sm font-medium transition-colors"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    window.location.href = '/automated-actions';
-                  }}
-                >
-                  <span>View All Actions</span>
-                  <span className="text-xs">→</span>
-                </a>
-              </div>
-            </div>
-          ),
-          duration: 15000,
-          className: 'border-l-4 border-l-red-500'
-        });
       });
 
       if (newActions.length > 0) {
@@ -628,12 +600,6 @@ export function SOCProvider({ children }: { children: ReactNode }) {
           automatedActions: [...prev.automatedActions, ...newActions],
           cases: [...prev.cases, ...newCases]
         }));
-        
-        // Show additional toast for case reports
-        toast.success(`📋 ${newCases.length} Case Reports Generated`, {
-          description: `Automated case reports created for all executed actions`,
-          duration: 5000
-        });
       }
     }
   }, [state.alerts]);
@@ -798,20 +764,13 @@ export function SOCProvider({ children }: { children: ReactNode }) {
       severity,
       source: 'frontend-manual',
       timestamp: new Date().toISOString(),
-    })
-      .then(() => {
-        toast.success(`✅ ${severity} detect sent to live API`, {
-          description: 'Waiting for websocket event...',
-          duration: 3500,
-        });
-      })
-      .catch((error: unknown) => {
-        const message = error instanceof Error ? error.message : 'Unknown error';
-        toast.error('Failed to send detect request', {
-          description: message,
-          duration: 4500,
-        });
+    }).catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      toast.error('Failed to send detect request', {
+        description: message,
+        duration: 4500,
       });
+    });
   };
 
   return (

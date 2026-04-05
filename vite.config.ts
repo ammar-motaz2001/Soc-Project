@@ -1,18 +1,29 @@
-
-  import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
-  import path from 'path';
+import path from 'path';
 
-  export default defineConfig({
+export default defineConfig(({ mode }) => {
+  const root = process.cwd();
+  const fileEnv = loadEnv(mode, root, '');
+  const apiUrl = (
+    fileEnv.NEXT_PUBLIC_API_URL ??
+    process.env.NEXT_PUBLIC_API_URL ??
+    'https://python-model-sigma.vercel.app'
+  ).replace(/\/$/, '');
+  const alertsUrl = (
+    fileEnv.NEXT_PUBLIC_ALERTS_API_URL ??
+    process.env.NEXT_PUBLIC_ALERTS_API_URL ??
+    'https://python-model-v8dl.vercel.app'
+  ).replace(/\/$/, '');
+  const disableWs = fileEnv.NEXT_PUBLIC_DISABLE_WEBSOCKET ?? '';
+
+  return {
     plugins: [react()],
-  define: {
-    'process.env.NEXT_PUBLIC_API_URL': JSON.stringify(
-      process.env.NEXT_PUBLIC_API_URL ?? 'https://python-model-sigma.vercel.app',
-    ),
-    'process.env.NEXT_PUBLIC_ALERTS_API_URL': JSON.stringify(
-      process.env.NEXT_PUBLIC_ALERTS_API_URL ?? 'https://python-model-v8dl.vercel.app',
-    ),
-  },
+    define: {
+      'process.env.NEXT_PUBLIC_API_URL': JSON.stringify(apiUrl),
+      'process.env.NEXT_PUBLIC_ALERTS_API_URL': JSON.stringify(alertsUrl),
+      'process.env.NEXT_PUBLIC_DISABLE_WEBSOCKET': JSON.stringify(disableWs),
+    },
     resolve: {
       extensions: ['.js', '.jsx', '.ts', '.tsx', '.json'],
       alias: {
@@ -65,4 +76,5 @@ import react from '@vitejs/plugin-react';
       port: 3000,
       open: true,
     },
-  });
+  };
+});

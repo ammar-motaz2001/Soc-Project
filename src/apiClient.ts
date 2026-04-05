@@ -1,9 +1,19 @@
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL ?? 'https://python-model-sigma.vercel.app';
+function normalizeApiBase(url: string): string {
+  return url.replace(/\/+$/, '');
+}
+
+const API_BASE = normalizeApiBase(
+  process.env.NEXT_PUBLIC_API_URL ?? 'https://python-model-sigma.vercel.app',
+);
 
 /** Base URL for dashboard `/alerts` list (v8dl service). */
-const ALERTS_LIST_BASE =
-  process.env.NEXT_PUBLIC_ALERTS_API_URL ?? 'https://python-model-v8dl.vercel.app';
+const ALERTS_LIST_BASE = normalizeApiBase(
+  process.env.NEXT_PUBLIC_ALERTS_API_URL ?? 'https://python-model-v8dl.vercel.app',
+);
+
+export function isWebSocketDisabled(): boolean {
+  return process.env.NEXT_PUBLIC_DISABLE_WEBSOCKET === 'true';
+}
 
 export interface RealtimeEvent {
   seq?: number;
@@ -57,7 +67,7 @@ export function connectEventsSocket(
   onClose?: () => void,
   onError?: (ev: Event) => void,
 ) {
-  const wsBase = API_BASE.replace('https://', 'wss://').replace('http://', 'ws://');
+  const wsBase = API_BASE.replace(/^https:/, 'wss:').replace(/^http:/, 'ws:');
   const ws = new WebSocket(`${wsBase}/ws/events?since=${since}`);
   ws.onopen = () => onOpen?.();
   ws.onclose = () => onClose?.();
