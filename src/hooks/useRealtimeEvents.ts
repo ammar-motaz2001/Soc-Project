@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   connectEventsSocket,
   getRecentEvents,
-  isWebSocketDisabled,
+  shouldAttemptRealtimeWebSocket,
   type RealtimeEvent,
 } from '../apiClient';
 
@@ -87,7 +87,7 @@ export function useRealtimeEvents() {
         lastSeqRef.current = 0;
       }
 
-      if (isWebSocketDisabled()) {
+      if (!shouldAttemptRealtimeWebSocket()) {
         startPolling();
         return;
       }

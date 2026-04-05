@@ -16,6 +16,7 @@ export default defineConfig(({ mode }) => {
     'https://python-model-v8dl.vercel.app'
   ).replace(/\/$/, '');
   const disableWs = fileEnv.NEXT_PUBLIC_DISABLE_WEBSOCKET ?? '';
+  const forceWs = fileEnv.NEXT_PUBLIC_FORCE_WEBSOCKET ?? '';
 
   return {
     plugins: [react()],
@@ -23,6 +24,7 @@ export default defineConfig(({ mode }) => {
       'process.env.NEXT_PUBLIC_API_URL': JSON.stringify(apiUrl),
       'process.env.NEXT_PUBLIC_ALERTS_API_URL': JSON.stringify(alertsUrl),
       'process.env.NEXT_PUBLIC_DISABLE_WEBSOCKET': JSON.stringify(disableWs),
+      'process.env.NEXT_PUBLIC_FORCE_WEBSOCKET': JSON.stringify(forceWs),
     },
     resolve: {
       extensions: ['.js', '.jsx', '.ts', '.tsx', '.json'],

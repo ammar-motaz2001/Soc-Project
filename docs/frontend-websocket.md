@@ -9,9 +9,68 @@ How it fits together:
 
 So the **detect → UI** path is: HTTP detect succeeds → event lands in `EVENT_HISTORY` → WebSocket delivers JSON to the browser (on the same server process that handled the detect).
 
+### Single stream — there is no separate “detect WebSocket”
+
+You **do not** call a different WebSocket for detections. You open **`/ws/events` once**, parse each JSON message, and **filter** on `kind`, `attack_detected`, etc.
+
+In **`main.py`**, `publish_event()` appends every event to **`EVENT_HISTORY`**; the WebSocket loop pushes **anything new** to connected clients. Detection-related traffic includes at least:
+
+| `kind` | Meaning |
+| ------ | ------- |
+| **`ddos`** | DDoS detection: `attack_detected` true/false, `attack_type`, `client_ip`, … |
+| **`bruteforce`** | Brute-force detection: same pattern |
+| **`alert`** | e.g. alert closed, with `"action": "closed"`, etc. |
+| **`system`** | First message `type: "connected"`, or `pong` after you send `ping` |
+
+So **“detect via WebSocket”** = connect to `/ws/events`, parse JSON, filter on `kind` / `attack_detected`.
+
+**Requirements**
+
+- API must be running (e.g. `uvicorn main:app …`).
+- New detection messages only appear after something hits the detector (e.g. **`POST /detect`**). **Benign** runs also publish (`attack_detected: false`) unless you filter them out in the UI.
+
+**Example: only real attacks (browser)**
+
+```js
+const ws = new WebSocket('ws://localhost:8000/ws/events?since=0');
+ws.onmessage = (e) => {
+  const msg = JSON.parse(e.data);
+  if (msg.kind === 'system') return;
+  if (msg.attack_detected === true) {
+    console.log('Detection:', msg.kind, msg);
+  }
+};
+```
+
+**Example: Python (`websockets` package)**
+
+```bash
+pip install websockets
+```
+
+```python
+import asyncio
+import json
+import websockets
+
+async def main():
+    uri = "ws://localhost:8000/ws/events?since=0"
+    async with websockets.connect(uri) as ws:
+        async for raw in ws:
+            msg = json.loads(raw)
+            if msg.get("kind") == "system":
+                continue
+            if msg.get("attack_detected") is True:
+                print("detection:", msg)
+
+asyncio.run(main())
+```
+
+*(Spotting WebSocket traffic on the wire — pcap / firewall / IDS — is different from this app’s dashboard stream.)*
+
 **Deployment note:** On Vercel / multiple workers, HTTP and WebSocket may hit different instances with separate memory, so live detect events might not show on every WS connection. For reliable realtime with scale-out, you’d need a shared bus (e.g. Redis pub/sub subscribed by a dedicated WS service). Locally with one uvicorn process, this works as described.
 
-**This repo:** Realtime HTTP + WebSocket use `NEXT_PUBLIC_API_URL` (see `src/apiClient.ts`). Vite loads this from `.env` via `loadEnv` in `vite.config.ts` (so `npm run dev` / `build` pick up your URL instead of always defaulting to `python-model-sigma`). Bootstrap + socket are in `getRecentEvents` / `connectEventsSocket`; `src/hooks/useRealtimeEvents.ts` wires them into `SOCContext`. If the WebSocket never opens (common on **Vercel serverless**), the hook falls back to polling `GET /events/recent` about every **3.5s**, with an **immediate** first poll so you are not stuck waiting for the first interval. Set `NEXT_PUBLIC_DISABLE_WEBSOCKET=true` in `.env` to skip opening a socket entirely (no repeated connection errors in the console).
+**This repo:** Realtime uses `NEXT_PUBLIC_API_URL` (`src/apiClient.ts`). Vite loads `.env` via `loadEnv` in `vite.config.ts`. `useRealtimeEvents` calls `getRecentEvents` then, when supported, `connectEventsSocket`. **If the API host is `*.vercel.app`, the app does not open a WebSocket at all** (`shouldAttemptRealtimeWebSocket()` in `apiClient.ts`) because that connection almost always fails on Vercel; it uses **polling** `GET /events/recent` every **~3.5s** with an immediate first poll—detections still arrive via the same `EVENT_HISTORY` tail. Use **`NEXT_PUBLIC_FORCE_WEBSOCKET=true`** to try WS anyway (e.g. testing). Use **`NEXT_PUBLIC_DISABLE_WEBSOCKET=true`** to force polling on any host.
 
 ### “WebSocket connection to wss://…/ws/events failed”
 
@@ -173,11 +232,22 @@ export function useSocRealtime(apiBaseHttp: string) {
 }
 ```
 
-Filter for the dashboard:
+Filter for the dashboard (all DDoS / brute-force classification messages):
 
 ```ts
 function isDetectEvent(e: SocEvent): boolean {
   return e.kind === 'ddos' || e.kind === 'bruteforce';
+}
+```
+
+Only **attacks** (exclude benign):
+
+```ts
+function isAttackDetection(e: SocEvent): boolean {
+  return (
+    (e.kind === 'ddos' || e.kind === 'bruteforce') &&
+    (e as { attack_detected?: boolean }).attack_detected === true
+  );
 }
 ```
 

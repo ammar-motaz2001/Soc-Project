@@ -15,6 +15,28 @@ export function isWebSocketDisabled(): boolean {
   return process.env.NEXT_PUBLIC_DISABLE_WEBSOCKET === 'true';
 }
 
+/**
+ * Vercel serverless usually cannot keep `/ws/events` open; opening it only spams console errors.
+ * We use HTTP polling for realtime instead. Override with NEXT_PUBLIC_FORCE_WEBSOCKET=true.
+ */
+export function shouldAttemptRealtimeWebSocket(): boolean {
+  if (isWebSocketDisabled()) {
+    return false;
+  }
+  if (process.env.NEXT_PUBLIC_FORCE_WEBSOCKET === 'true') {
+    return true;
+  }
+  try {
+    const host = new URL(API_BASE).hostname.toLowerCase();
+    if (host === 'vercel.app' || host.endsWith('.vercel.app')) {
+      return false;
+    }
+  } catch {
+    /* invalid API_BASE */
+  }
+  return true;
+}
+
 export interface RealtimeEvent {
   seq?: number;
   kind?: string;
@@ -73,9 +95,13 @@ export function connectEventsSocket(
   ws.onclose = () => onClose?.();
   ws.onerror = (ev) => onError?.(ev);
   ws.onmessage = (message) => {
-    const payload = JSON.parse(message.data) as RealtimeEvent;
-    if (payload.kind === 'system') return;
-    onEvent(payload);
+    try {
+      const payload = JSON.parse(message.data as string) as RealtimeEvent;
+      if (payload.kind === 'system') return;
+      onEvent(payload);
+    } catch {
+      /* ignore malformed frame */
+    }
   };
   return ws;
 }
