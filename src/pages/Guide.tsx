@@ -1,4 +1,4 @@
-import { Home, Bell, CheckCircle, Database, FileText, BookOpen, FolderOpen, Shield, Zap } from 'lucide-react';
+import { Home, Bell, CheckCircle, Database, FileText, BookOpen, FolderOpen, Zap } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 
 export default function Guide() {
@@ -23,22 +23,8 @@ export default function Guide() {
       features: [
         'Display all alerts in an interactive table',
         'Filter alerts by status (Open/Closed)',
-        'Assign alerts to analysts',
         'Add notes and track investigation progress',
         'View complete technical details for each alert (IPs, MACs, hashes, etc.)'
-      ]
-    },
-    {
-      icon: CheckCircle,
-      title: 'Actions',
-      path: 'Decision Making',
-      description: 'Page for reviewing and resolving security alerts assigned to you.',
-      features: [
-        'Review alerts assigned to you',
-        'Resolve alerts as True Positive or False Positive',
-        'Add investigation findings and recommendations',
-        'Document actions taken for each case',
-        'Automatic case report generation'
       ]
     },
     {
@@ -199,10 +185,12 @@ export default function Guide() {
             <ol className="space-y-2.5 m-0 pl-5 text-sm text-[#E6EEF6]">
               <li>Start from <strong className="text-[#A7EA3B]">Dashboard</strong> to see system overview and statistics</li>
               <li>Navigate to <strong className="text-[#A7EA3B]">Alert Queue</strong> to view all alerts</li>
-              <li>Assign alerts to yourself using the "Assign to me" button</li>
-              <li>Review assigned alerts in the <strong className="text-[#A7EA3B]">Actions</strong> page</li>
+              <li>
+                Resolve alerts as True Positive or False Positive from the{' '}
+                <strong className="text-[#A7EA3B]">Dashboard</strong> or{' '}
+                <strong className="text-[#A7EA3B]">Alert Queue</strong>
+              </li>
               <li>Use <strong className="text-[#A7EA3B]">Playbooks</strong> to learn appropriate response procedures</li>
-              <li>Resolve alerts as True Positive or False Positive with detailed findings</li>
               <li>Monitor <strong className="text-[#A7EA3B]">Automated Actions</strong> for system responses to high-risk threats</li>
               <li>Review closed cases and download reports in <strong className="text-[#A7EA3B]">Case Reports</strong></li>
             </ol>

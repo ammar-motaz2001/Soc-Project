@@ -40,7 +40,7 @@ export function mapClosedAlertToCase(alert: Alert): Case {
       resolution === 'True Positive'
         ? 'Continue monitoring linked assets; validate automated actions completed successfully.'
         : 'Review detection logic and document benign activity to reduce noise.',
-    timeToResolve: 'Derived from alert model (updated_at)',
+    timeToResolve: '',
     alertDetails: alert,
   };
 }

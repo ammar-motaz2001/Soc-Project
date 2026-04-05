@@ -1,12 +1,11 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, Bell, CheckCircle, Database, FileText, BookOpen, FolderOpen, LogOut, Menu, BookMarked, Zap } from 'lucide-react';
+import { Home, Bell, Database, FileText, BookOpen, FolderOpen, LogOut, Menu, BookMarked, Zap } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useState } from 'react';
 
 const navItems = [
   { path: '/', label: 'Dashboard', icon: Home, shortLabel: 'Home' },
   { path: '/alert-queue', label: 'Alert queue', icon: Bell, shortLabel: 'Queue' },
-  { path: '/actions', label: 'Actions', icon: CheckCircle, shortLabel: 'Actions' },
   { path: '/automated-actions', label: 'Automated Actions', icon: Zap, shortLabel: 'Auto' },
   { path: '/siem', label: 'SIEM', icon: Database, shortLabel: 'SIEM' },
   { path: '/documentation', label: 'Documentation', icon: FileText, shortLabel: 'Docs' },

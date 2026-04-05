@@ -6,7 +6,6 @@ import Layout from './components/Layout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import AlertQueue from './pages/AlertQueue';
-import Actions from './pages/Actions';
 import AutomatedActions from './pages/AutomatedActions';
 import SIEM from './pages/SIEM';
 import Guide from './pages/Guide';
@@ -57,16 +56,6 @@ export default function App() {
                 <ProtectedRoute>
                   <Layout>
                     <AlertQueue />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/actions"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <Actions />
                   </Layout>
                 </ProtectedRoute>
               }

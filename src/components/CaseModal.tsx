@@ -1,4 +1,4 @@
-import { X, FileText, CheckCircle, AlertTriangle, Clock, User, Calendar, Download, Network, HardDrive, Mail, Shield, Activity, MapPin } from 'lucide-react';
+import { X, FileText, CheckCircle, AlertTriangle, User, Calendar, Download, Network, HardDrive, Mail, Shield, Activity, MapPin } from 'lucide-react';
 import { Case } from '../context/SOCContext';
 import { useState } from 'react';
 
@@ -122,20 +122,13 @@ export default function CaseModal({ case: caseData, onClose, onDownload }: CaseM
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 md:gap-4 mb-3 md:mb-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 md:gap-4 mb-3 md:mb-4">
           <div className="bg-[#0F1722] rounded-lg p-3 md:p-4">
             <div className="flex items-center gap-2 mb-1.5 md:mb-2">
               <User className="text-[#A7EA3B]" size={14} />
               <div className="text-[#98A0AC] text-xs">Analyst</div>
             </div>
             <div className="text-xs md:text-sm truncate">{caseData.analyst}</div>
-          </div>
-          <div className="bg-[#0F1722] rounded-lg p-3 md:p-4">
-            <div className="flex items-center gap-2 mb-1.5 md:mb-2">
-              <Clock className="text-[#A7EA3B]" size={14} />
-              <div className="text-[#98A0AC] text-xs">Time to Resolve</div>
-            </div>
-            <div className="text-xs md:text-sm">{caseData.timeToResolve}</div>
           </div>
           <div className="bg-[#0F1722] rounded-lg p-3 md:p-4">
             <div className="flex items-center gap-2 mb-1.5 md:mb-2">

@@ -199,14 +199,6 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <div className="text-[#98A0AC] mb-3 text-sm">
-              Data from{' '}
-              <span className="text-[#E6EEF6] font-mono text-xs">
-                /alerts
-              </span>{' '}
-              on the alerts API service.
-            </div>
-
             <div className="bg-[#19232C] rounded-[10px] border border-white/[0.03] overflow-hidden flex-1 flex flex-col">
               <table className="w-full border-collapse">
                 <thead className="bg-[#0f1a22]">

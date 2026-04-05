@@ -10,7 +10,7 @@ import { getAutomatedActionsList } from '../apiClient';
 import { mapRemoteAutomatedActionToAutomatedAction } from '../utils/mapRemoteAutomatedAction';
 import { 
   Zap, CheckCircle, XCircle, Clock, Filter, Shield, Terminal, 
-  Network, Mail, Lock, AlertTriangle, Activity, ChevronDown, 
+  Mail, Lock, AlertTriangle, Activity, ChevronDown, 
   ChevronRight, Server, User, FileText, ExternalLink, TrendingUp,
   Eye, Download, Search, Calendar, Play, ChevronUp
 } from 'lucide-react';
@@ -103,16 +103,6 @@ export default function AutomatedActions() {
     failed: automatedActions.filter(a => a.status === 'Failed').length,
     pending: automatedActions.filter(a => a.status === 'Pending').length,
     partial: automatedActions.filter(a => a.status === 'Partial Success').length,
-    avgDuration: automatedActions.filter(a => a.duration && a.duration !== '-').length > 0
-      ? (automatedActions
-          .filter(a => a.duration && a.duration !== '-')
-          .reduce((acc, a) => {
-            const durationValue = parseFloat(a.duration.replace(/[^0-9.]/g, ''));
-            return acc + (isNaN(durationValue) ? 0 : durationValue);
-          }, 0) / 
-          automatedActions.filter(a => a.duration && a.duration !== '-').length).toFixed(2)
-      : '0',
-    totalApiCalls: automatedActions.reduce((acc, a) => acc + (a.apiCalls || 0), 0)
   };
 
   // Chart data
@@ -182,14 +172,13 @@ export default function AutomatedActions() {
 
   // Export to CSV function
   const handleExportCSV = () => {
-    const csvHeaders = ['Alert ID', 'Action Type', 'Category', 'Status', 'Duration', 'API Calls', 'Executed At', 'Playbook'];
+    const csvHeaders = ['Alert ID', 'Action Type', 'Category', 'Status', 'Duration', 'Executed At', 'Playbook'];
     const csvRows = filteredActions.map(action => [
       action.alertId,
       action.actionType,
       action.category,
       action.status,
       action.duration,
-      action.apiCalls,
       action.executedAt,
       action.playbookUsed || '-'
     ]);
@@ -289,7 +278,7 @@ export default function AutomatedActions() {
             ? 'Loading from API…'
             : loadError
               ? 'Automated actions API unavailable'
-              : `GET /automated-actions • ${stats.total} actions`
+              : undefined
         }
       />
 
@@ -310,7 +299,7 @@ export default function AutomatedActions() {
       )}
 
       {/* Enhanced Statistics Grid */}
-      <section className="mt-[18px] grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+      <section className="mt-[18px] grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-[#19232C] rounded-[10px] p-4 border border-white/[0.03] hover:border-[#A7EA3B]/20 transition-colors">
           <div className="flex items-center justify-between mb-2">
             <div className="text-[#98A0AC] text-xs">Total Actions</div>
@@ -347,24 +336,6 @@ export default function AutomatedActions() {
           </div>
           <div className="text-2xl text-[#FF6B6B]">{stats.failed}</div>
           <div className="text-[#98A0AC] text-xs mt-1">Needs attention</div>
-        </div>
-
-        <div className="bg-[#19232C] rounded-[10px] p-4 border border-white/[0.03] hover:border-[#A7EA3B]/20 transition-colors">
-          <div className="flex items-center justify-between mb-2">
-            <div className="text-[#98A0AC] text-xs">Avg Duration</div>
-            <Activity size={18} className="text-[#A7EA3B]" />
-          </div>
-          <div className="text-2xl text-[#E6EEF6]">{stats.avgDuration}s</div>
-          <div className="text-[#98A0AC] text-xs mt-1">Per action</div>
-        </div>
-
-        <div className="bg-[#19232C] rounded-[10px] p-4 border border-white/[0.03] hover:border-[#60A5FA]/20 transition-colors">
-          <div className="flex items-center justify-between mb-2">
-            <div className="text-[#98A0AC] text-xs">API Calls</div>
-            <Network size={18} className="text-[#60A5FA]" />
-          </div>
-          <div className="text-2xl text-[#E6EEF6]">{stats.totalApiCalls}</div>
-          <div className="text-[#98A0AC] text-xs mt-1">Total executed</div>
         </div>
       </section>
 
@@ -579,20 +550,19 @@ export default function AutomatedActions() {
                     <th className="px-3.5 py-3 text-left text-[#98A0AC] text-sm w-[110px]">Category</th>
                     <th className="px-3.5 py-3 text-left text-[#98A0AC] text-sm w-[130px]">Status</th>
                     <th className="px-3.5 py-3 text-left text-[#98A0AC] text-sm w-[90px]">Duration</th>
-                    <th className="px-3.5 py-3 text-left text-[#98A0AC] text-sm w-[80px]">API Calls</th>
                     <th className="px-3.5 py-3 text-left text-[#98A0AC] text-sm">Playbook</th>
                   </tr>
                 </thead>
                 <tbody>
                   {isLoading && automatedActions.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="px-3.5 py-7 text-center text-[#98A0AC]">
+                      <td colSpan={7} className="px-3.5 py-7 text-center text-[#98A0AC]">
                         Loading…
                       </td>
                     </tr>
                   ) : filteredActions.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="px-3.5 py-7 text-center text-[#98A0AC]">
+                      <td colSpan={7} className="px-3.5 py-7 text-center text-[#98A0AC]">
                         No automated actions found matching your filters.
                       </td>
                     </tr>
@@ -642,9 +612,6 @@ export default function AutomatedActions() {
                           <td className="px-3.5 py-3 text-[#98A0AC] text-sm">
                             <code className="text-xs">{action.duration}</code>
                           </td>
-                          <td className="px-3.5 py-3 text-[#98A0AC] text-sm text-center">
-                            {action.apiCalls}
-                          </td>
                           <td className="px-3.5 py-3 text-[#98A0AC] text-sm">
                             <div className="flex items-center gap-1.5">
                               <FileText size={12} className="text-[#60A5FA]" />
@@ -656,7 +623,7 @@ export default function AutomatedActions() {
 
                       const detailsRow = isExpanded ? (
                         <tr key={`${action.id}-details`} className="bg-[#0F1722] border-b border-white/[0.02]">
-                          <td colSpan={8} className="px-3.5 py-4">
+                          <td colSpan={7} className="px-3.5 py-4">
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                               {/* Left Column - Details */}
                               <div className="space-y-3">
@@ -788,10 +755,6 @@ export default function AutomatedActions() {
                   <div className="text-[#A7F3D0]">
                     {stats.total > 0 ? ((stats.success / stats.total) * 100).toFixed(1) : 0}%
                   </div>
-                  <div className="text-[#98A0AC]">Avg Response Time:</div>
-                  <div className="text-[#E6EEF6]">{stats.avgDuration}s</div>
-                  <div className="text-[#98A0AC]">Total API Calls:</div>
-                  <div className="text-[#E6EEF6]">{stats.totalApiCalls}</div>
                   <div className="text-[#98A0AC]">Actions/Hour:</div>
                   <div className="text-[#E6EEF6]">{(stats.total / 24).toFixed(1)}</div>
                 </div>

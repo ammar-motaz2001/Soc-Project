@@ -122,7 +122,6 @@ Resolved Date:  ${caseItem.dateResolved}
 ANALYST INFORMATION
 -------------------
 Analyst:        ${caseItem.analyst}
-Time to Resolve: ${caseItem.timeToResolve}
 
 RESOLUTION
 ----------
