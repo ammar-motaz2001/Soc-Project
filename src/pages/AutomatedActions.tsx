@@ -1,10 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import React from 'react';
 import { useSOC } from '../context/SOCContext';
+import type { AutomatedAction } from '../context/SOCContext';
 import PageHeader from '../components/PageHeader';
 import ActionReportModal from '../components/ActionReportModal';
 import ErrorBoundary from '../components/ErrorBoundary';
 import { toast } from 'sonner@2.0.3';
+import { getAutomatedActionsList } from '../apiClient';
+import { mapRemoteAutomatedActionToAutomatedAction } from '../utils/mapRemoteAutomatedAction';
 import { 
   Zap, CheckCircle, XCircle, Clock, Filter, Shield, Terminal, 
   Network, Mail, Lock, AlertTriangle, Activity, ChevronDown, 
@@ -12,22 +15,54 @@ import {
   Eye, Download, Search, Calendar, Play, ChevronUp
 } from 'lucide-react';
 import { 
-  LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
+  BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 
 } from 'recharts';
 
 export default function AutomatedActions() {
-  const { state, simulateAlert } = useSOC();
+  const { simulateAlert } = useSOC();
+  const [automatedActions, setAutomatedActions] = useState<AutomatedAction[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<'All' | 'Success' | 'Failed' | 'Pending' | 'Partial Success'>('All');
   const [filterCategory, setFilterCategory] = useState<'All' | 'Containment' | 'Investigation' | 'Notification' | 'Remediation'>('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
-  const [selectedAction, setSelectedAction] = useState<any | null>(null);
+  const [selectedAction, setSelectedAction] = useState<AutomatedAction | null>(null);
   const [isLiveMonitoring, setIsLiveMonitoring] = useState(false);
   const [showSimulateMenu, setShowSimulateMenu] = useState(false);
 
-  // Use automated actions from state
-  const automatedActions = state.automatedActions || [];
+  const loadAutomatedActions = useCallback(async () => {
+    setLoadError(null);
+    try {
+      const data = await getAutomatedActionsList();
+      const mapped = (data.automated_actions ?? [])
+        .map(mapRemoteAutomatedActionToAutomatedAction)
+        .sort(
+          (a, b) =>
+            new Date(b.executedAt).getTime() - new Date(a.executedAt).getTime(),
+        );
+      setAutomatedActions(mapped);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Failed to load automated actions';
+      setLoadError(message);
+      toast.error('Could not load automated actions', { description: message });
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadAutomatedActions();
+  }, [loadAutomatedActions]);
+
+  useEffect(() => {
+    if (!isLiveMonitoring) return;
+    const id = window.setInterval(() => {
+      void loadAutomatedActions();
+    }, 10000);
+    return () => window.clearInterval(id);
+  }, [isLiveMonitoring, loadAutomatedActions]);
 
   // Close simulate menu when clicking outside
   useEffect(() => {
@@ -50,10 +85,14 @@ export default function AutomatedActions() {
   const filteredActions = automatedActions.filter(action => {
     const statusMatch = filterStatus === 'All' || action.status === filterStatus;
     const categoryMatch = filterCategory === 'All' || action.category === filterCategory;
-    const searchMatch = searchQuery === '' || 
-      action.actionType.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      action.alertRule.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      action.alertId.toLowerCase().includes(searchQuery.toLowerCase());
+    const q = searchQuery.toLowerCase();
+    const searchMatch =
+      searchQuery === '' ||
+      action.actionType.toLowerCase().includes(q) ||
+      action.alertRule.toLowerCase().includes(q) ||
+      action.alertId.toLowerCase().includes(q) ||
+      action.details.toLowerCase().includes(q) ||
+      (action.affectedAssets ?? []).some((asset) => asset.toLowerCase().includes(q));
     
     return statusMatch && categoryMatch && searchMatch;
   });
@@ -82,15 +121,6 @@ export default function AutomatedActions() {
     { name: 'Investigation', value: automatedActions.filter(a => a.category === 'Investigation').length, color: '#60A5FA' },
     { name: 'Notification', value: automatedActions.filter(a => a.category === 'Notification').length, color: '#FFD966' },
     { name: 'Remediation', value: automatedActions.filter(a => a.category === 'Remediation').length, color: '#A7F3D0' }
-  ];
-
-  const timelineData = [
-    { time: '00:00', actions: 3 },
-    { time: '04:00', actions: 1 },
-    { time: '08:00', actions: 5 },
-    { time: '12:00', actions: 8 },
-    { time: '16:00', actions: 6 },
-    { time: '20:00', actions: 4 }
   ];
 
   const successRateData = [
@@ -209,86 +239,75 @@ export default function AutomatedActions() {
     }
   };
 
-  // Live Monitor Effect - watches for new automated actions
+  const prevCountRef = React.useRef(0);
   useEffect(() => {
-    if (!isLiveMonitoring || automatedActions.length === 0) return;
-
-    const previousCount = sessionStorage.getItem('automatedActionsCount');
-    const currentCount = automatedActions.length.toString();
-
-    if (previousCount && previousCount !== currentCount && parseInt(currentCount) > parseInt(previousCount)) {
-      // New action detected
-      const newAction = automatedActions[automatedActions.length - 1];
-      
-      if (newAction && newAction.actionType && newAction.status) {
-        // Create a safe copy of the action
-        const safeAction = {
-          id: newAction.id || 'N/A',
-          alertId: newAction.alertId || 'N/A',
-          alertRule: newAction.alertRule || 'N/A',
-          actionType: newAction.actionType || 'N/A',
-          category: newAction.category || 'N/A',
-          status: newAction.status || 'N/A',
-          executedAt: newAction.executedAt || 'N/A',
-          completedAt: newAction.completedAt,
-          duration: newAction.duration || 'N/A',
-          playbookUsed: newAction.playbookUsed,
-          severity: newAction.severity || 'N/A',
-          details: newAction.details || 'No details available',
-          executionSteps: newAction.executionSteps || [],
-          affectedAssets: newAction.affectedAssets || [],
-          triggeredBy: newAction.triggeredBy || 'System',
-          apiCalls: newAction.apiCalls || 0,
-          dataProcessed: newAction.dataProcessed || 'N/A',
-          errorMessage: newAction.errorMessage
-        };
-        
-        console.log('New action detected:', safeAction);
-        
-        toast.info(
-          <div className="flex items-center justify-between gap-3 w-full">
-            <div className="flex-1">
-              <div className="font-medium text-[#E6EEF6]">🔔 New Automated Action Detected!</div>
-              <div className="text-xs text-[#98A0AC] mt-1">{newAction.actionType} - {newAction.status}</div>
-            </div>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                try {
-                  console.log('Opening modal with action:', safeAction);
-                  setSelectedAction(safeAction);
-                  toast.dismiss();
-                } catch (error) {
-                  console.error('Error in button onClick:', error);
-                  toast.error('Failed to open action details');
-                }
-              }}
-              className="px-3 py-1.5 bg-[#A7EA3B] text-[#0F1722] rounded-lg text-xs font-medium hover:bg-[#98d932] transition-colors shrink-0"
-            >
-              View
-            </button>
-          </div>,
-          {
-            duration: 8000,
-            style: {
-              background: '#19232C',
-              border: '1px solid rgba(167, 234, 59, 0.2)',
-              color: '#E6EEF6',
-            }
-          }
-        );
-      }
+    if (!isLiveMonitoring) {
+      prevCountRef.current = automatedActions.length;
+      return;
     }
-
-    sessionStorage.setItem('automatedActionsCount', currentCount);
-  }, [automatedActions.length, isLiveMonitoring, automatedActions]);
+    if (automatedActions.length > prevCountRef.current && prevCountRef.current > 0) {
+      const newest = automatedActions[0];
+      toast.info(
+        <div className="flex items-center justify-between gap-3 w-full">
+          <div className="flex-1">
+            <div className="font-medium text-[#E6EEF6]">New automated action</div>
+            <div className="text-xs text-[#98A0AC] mt-1">
+              {newest.actionType} — {newest.status}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setSelectedAction(newest);
+              toast.dismiss();
+            }}
+            className="px-3 py-1.5 bg-[#A7EA3B] text-[#0F1722] rounded-lg text-xs font-medium hover:bg-[#98d932] transition-colors shrink-0"
+          >
+            View
+          </button>
+        </div>,
+        {
+          duration: 8000,
+          style: {
+            background: '#19232C',
+            border: '1px solid rgba(167, 234, 59, 0.2)',
+            color: '#E6EEF6',
+          },
+        },
+      );
+    }
+    prevCountRef.current = automatedActions.length;
+  }, [automatedActions, isLiveMonitoring]);
 
   return (
     <div className="pb-6">
       <PageHeader
         title="Automated Actions"
-        subtitle={`Real-time monitoring and execution of automated security responses • ${stats.total} total actions executed`}
+        subtitle={
+          isLoading
+            ? 'Loading from API…'
+            : loadError
+              ? 'Automated actions API unavailable'
+              : `GET /automated-actions • ${stats.total} actions`
+        }
       />
+
+      {loadError && (
+        <div className="mt-3 p-3 rounded-[10px] bg-[#FF6B6B]/10 border border-[#FF6B6B]/25 text-sm text-[#E6EEF6]">
+          {loadError}
+          <button
+            type="button"
+            onClick={() => {
+              setIsLoading(true);
+              void loadAutomatedActions();
+            }}
+            className="ml-3 px-2 py-1 rounded-lg bg-white/10 hover:bg-white/15 text-xs"
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {/* Enhanced Statistics Grid */}
       <section className="mt-[18px] grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
@@ -434,6 +453,17 @@ export default function AutomatedActions() {
               Automated Actions Execution Log
             </h3>
             <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsLoading(true);
+                  void loadAutomatedActions();
+                }}
+                disabled={isLoading}
+                className="px-3 py-2 bg-[#0F1722] text-[#E6EEF6] rounded-lg border border-white/[0.03] text-sm hover:border-[#A7EA3B]/30 transition-colors disabled:opacity-50"
+              >
+                Refresh
+              </button>
               <button 
                 onClick={handleExportCSV}
                 className="px-3 py-2 bg-[#0F1722] text-[#E6EEF6] rounded-lg border border-white/[0.03] text-sm hover:border-[#A7EA3B]/30 transition-colors flex items-center gap-2"
@@ -554,7 +584,13 @@ export default function AutomatedActions() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredActions.length === 0 ? (
+                  {isLoading && automatedActions.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="px-3.5 py-7 text-center text-[#98A0AC]">
+                        Loading…
+                      </td>
+                    </tr>
+                  ) : filteredActions.length === 0 ? (
                     <tr>
                       <td colSpan={8} className="px-3.5 py-7 text-center text-[#98A0AC]">
                         No automated actions found matching your filters.
@@ -646,7 +682,7 @@ export default function AutomatedActions() {
                                 <div>
                                   <div className="text-[#98A0AC] text-xs mb-2">Affected Assets</div>
                                   <div className="flex flex-wrap gap-2">
-                                    {action.affectedAssets.map((asset, idx) => (
+                                    {(action.affectedAssets ?? []).map((asset, idx) => (
                                       <span
                                         key={idx}
                                         className="px-2 py-1 bg-[#19232C] rounded text-xs text-[#E6EEF6] border border-white/[0.03]"
@@ -677,7 +713,7 @@ export default function AutomatedActions() {
                               <div>
                                 <div className="text-[#98A0AC] text-xs mb-2">Execution Timeline</div>
                                 <div className="space-y-2">
-                                  {action.executionSteps.map((step, idx) => (
+                                  {(action.executionSteps ?? []).map((step, idx) => (
                                     <div
                                       key={idx}
                                       className="flex items-start gap-3 p-2 bg-[#19232C] rounded-lg border border-white/[0.03]"
@@ -767,9 +803,9 @@ export default function AutomatedActions() {
 
       {/* Action Report Modal */}
       <ErrorBoundary>
-        <ActionReportModal 
-          action={selectedAction} 
-          onClose={() => setSelectedAction(null)} 
+        <ActionReportModal
+          action={selectedAction}
+          onClose={() => setSelectedAction(null)}
         />
       </ErrorBoundary>
     </div>

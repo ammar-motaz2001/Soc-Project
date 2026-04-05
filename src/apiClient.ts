@@ -153,3 +153,35 @@ export async function patchCloseAlertAsFalsePositive(alertId: string) {
   );
   return parseJson<Record<string, unknown>>(res);
 }
+
+// --- Automated actions (python-model-v8dl) ---
+
+export interface RemoteAutomatedActionEnforcement {
+  enabled?: boolean;
+  attempted?: boolean;
+  applied?: boolean;
+  message?: string;
+}
+
+export interface RemoteAutomatedAction {
+  id: string;
+  action: string;
+  ip: string;
+  reason: string;
+  status: string;
+  device_id: string;
+  alert_id: string | null;
+  created_at: string;
+  enforcement?: RemoteAutomatedActionEnforcement;
+}
+
+export interface RemoteAutomatedActionsResponse {
+  automated_actions: RemoteAutomatedAction[];
+}
+
+export async function getAutomatedActionsList() {
+  const res = await fetch(`${ALERTS_LIST_BASE}/automated-actions`, {
+    headers: { accept: 'application/json' },
+  });
+  return parseJson<RemoteAutomatedActionsResponse>(res);
+}
