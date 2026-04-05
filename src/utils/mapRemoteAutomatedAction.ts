@@ -9,7 +9,7 @@ function mapApiStatus(remoteStatus: string): AutomatedAction['status'] {
   return 'Pending';
 }
 
-function mapCategory(action: string): AutomatedAction['category'] {
+export function playbookCategoryFromActionKey(action: string): AutomatedAction['category'] {
   const a = action.toLowerCase();
   if (a.includes('block') || a.includes('isolate')) return 'Containment';
   if (a.includes('notify') || a.includes('alert')) return 'Notification';
@@ -17,7 +17,7 @@ function mapCategory(action: string): AutomatedAction['category'] {
   return 'Investigation';
 }
 
-function humanizeAction(action: string): string {
+export function humanizeAutomatedActionKey(action: string): string {
   return action
     .split(/[_\s]+/)
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
@@ -47,7 +47,7 @@ export function mapRemoteAutomatedActionToAutomatedAction(
 
   if (executionSteps.length === 0) {
     executionSteps.push({
-      step: humanizeAction(remote.action),
+      step: humanizeAutomatedActionKey(remote.action),
       status: remote.status === 'done' ? 'completed' : 'pending',
       duration: '-',
       details: remote.reason,
@@ -66,8 +66,8 @@ export function mapRemoteAutomatedActionToAutomatedAction(
     id: remote.id,
     alertId: remote.alert_id ?? '—',
     alertRule: remote.reason,
-    actionType: humanizeAction(remote.action),
-    category: mapCategory(remote.action),
+    actionType: humanizeAutomatedActionKey(remote.action),
+    category: playbookCategoryFromActionKey(remote.action),
     status: mapApiStatus(remote.status),
     executedAt: remote.created_at,
     duration: '-',
