@@ -1,4 +1,14 @@
-import { Home, Bell, CheckCircle, Database, FileText, BookOpen, FolderOpen, Zap } from 'lucide-react';
+import {
+  Home,
+  Bell,
+  CheckCircle,
+  Database,
+  FileText,
+  BookOpen,
+  FolderOpen,
+  Shield,
+  Zap,
+} from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 
 export default function Guide() {
