@@ -131,11 +131,18 @@ export interface RemoteDashboardAlertsResponse {
   alerts: RemoteDashboardAlert[];
 }
 
-export async function getDashboardAlerts() {
+export async function getDashboardAlerts(): Promise<RemoteDashboardAlertsResponse> {
   const res = await fetch(`${ALERTS_LIST_BASE}/alerts`, {
     headers: { accept: 'application/json' },
   });
-  return parseJson<RemoteDashboardAlertsResponse>(res);
+  const body = await parseJson<RemoteDashboardAlertsResponse | RemoteDashboardAlert[]>(res);
+  if (Array.isArray(body)) {
+    return { alerts: body };
+  }
+  return {
+    ...body,
+    alerts: body.alerts ?? [],
+  };
 }
 
 export async function patchCloseAlertAsTruePositive(alertId: string) {
