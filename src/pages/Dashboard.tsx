@@ -8,6 +8,8 @@ import AlertModal from '../components/AlertModal';
 import { getDashboardAlerts } from '../apiClient';
 import { mapRemoteDashboardAlertToAlert } from '../utils/mapRemoteDashboardAlert';
 
+const DASHBOARD_REFRESH_EVENT = 'soc:dashboard-refresh';
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const [alerts, setAlerts] = useState<Alert[]>([]);
@@ -34,6 +36,17 @@ export default function Dashboard() {
 
   useEffect(() => {
     void loadAlerts();
+  }, [loadAlerts]);
+
+  useEffect(() => {
+    const handleRealtimeRefresh = () => {
+      void loadAlerts();
+    };
+
+    window.addEventListener(DASHBOARD_REFRESH_EVENT, handleRealtimeRefresh);
+    return () => {
+      window.removeEventListener(DASHBOARD_REFRESH_EVENT, handleRealtimeRefresh);
+    };
   }, [loadAlerts]);
 
   const stats = useMemo(() => {

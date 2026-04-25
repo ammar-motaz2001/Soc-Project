@@ -123,6 +123,7 @@ interface SOCContextType {
 }
 
 const STORAGE_KEY = 'soc_sim_data_v11';
+const DASHBOARD_REFRESH_EVENT = 'soc:dashboard-refresh';
 
 /** Empty initial state – all data comes from localStorage. */
 const emptyState: SOCState = {
@@ -147,6 +148,10 @@ function isBackendDetectEvent(event: RealtimeEvent): boolean {
   return k === 'ddos' || k === 'bruteforce';
 }
 
+function isAttackDetectedEvent(event: RealtimeEvent): boolean {
+  return (event as Record<string, unknown>).attack_detected === true;
+}
+
 function toastForDetectEvent(event: RealtimeEvent): void {
   const r = event as Record<string, unknown>;
   const attack = r.attack_detected === true;
@@ -162,6 +167,9 @@ function toastForDetectEvent(event: RealtimeEvent): void {
   } else {
     toast.info(title, { description, duration: 4500 });
   }
+
+  // Notify the dashboard to refresh insights from its API endpoint.
+  window.dispatchEvent(new Event(DASHBOARD_REFRESH_EVENT));
 }
 
 function toSeverity(value: unknown): Alert['severity'] {
@@ -501,6 +509,7 @@ const SOCContext = createContext<SOCContextType | undefined>(undefined);
 export function SOCProvider({ children }: { children: ReactNode }) {
   const { events: realtimeEvents } = useRealtimeEvents();
   const processedRealtimeIdsRef = useRef<Set<string>>(new Set());
+  const hasHandledInitialRealtimeBatchRef = useRef(false);
 
   const [state, setState] = useState<SOCState>(() => {
     try {
@@ -547,6 +556,9 @@ export function SOCProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    const shouldShowRealtimeToasts = hasHandledInitialRealtimeBatchRef.current;
+    hasHandledInitialRealtimeBatchRef.current = true;
+
     const mappedAlerts = newEvents
       .map((event) => mapRealtimeEventToAlert(event))
       .filter((alert): alert is Alert => alert !== null);
@@ -559,7 +571,7 @@ export function SOCProvider({ children }: { children: ReactNode }) {
     }
 
     for (const evt of newEvents) {
-      if (isBackendDetectEvent(evt)) {
+      if (shouldShowRealtimeToasts && isBackendDetectEvent(evt) && isAttackDetectedEvent(evt)) {
         toastForDetectEvent(evt);
       }
     }
